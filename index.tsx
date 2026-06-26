@@ -1,11 +1,28 @@
 import definePlugin from "@utils/types";
 import { FluxDispatcher } from "@webpack/common";
 import { showNotification } from "@api/Notifications";
+import { HeaderBarButton } from "@api/HeaderBar";
+import { React } from "@webpack/common";
 
 export default definePlugin({
     name: "ShowAllPings",
-    description: "Shows notifications for every ping (@mention, @everyone, @here)",
-    authors: [{ name: "YourName", id: 0n }], // Change 0n to your Discord User ID (as BigInt)
+    description: "Shows notifications for EVERY ping + Test button in toolbar (like Soggy)",
+    authors: [{ name: "YourName", id: 0n }], // Change to your Discord ID
+
+    // Adds button to the top-right header bar
+    headerBarButton: {
+        icon: () => (
+            <span style={{ fontSize: "18px", lineHeight: "1" }}>🛎️</span>
+        ),
+        tooltip: "Test All Pings",
+        onClick: () => {
+            showNotification({
+                title: "Test Ping Notification",
+                body: "This is a test! @everyone and @here work too.",
+                color: "#ED4245"
+            });
+        }
+    },
 
     flux: {
         MESSAGE_CREATE({ message, channelId, optimistic }) {
@@ -36,6 +53,6 @@ export default definePlugin({
     },
 
     start() {
-        console.log("%c[ShowAllPings] Plugin loaded successfully!", "color: #ED4245; font-weight: bold");
+        console.log("%c[ShowAllPings] ✅ Loaded with toolbar button!", "color: #ED4245; font-weight: bold");
     }
 });
