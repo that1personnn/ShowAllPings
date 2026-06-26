@@ -24,58 +24,38 @@ function PingHistoryModal({ modalProps }: { modalProps: any }) {
     return (
         <ModalRoot size={ModalSize.MEDIUM} {...modalProps}>
             <ModalHeader>
-                <Text variant="heading-lg/semibold">Ping History</Text>
+                <Text variant="heading-lg/semibold">Ping History ({pings.length})</Text>
             </ModalHeader>
             <ModalContent>
-                <ScrollerThin style={{ maxHeight: "400px" }}>
+                <ScrollerThin style={{ maxHeight: "500px" }}>
                     {pings.length === 0 ? (
-                        <Text variant="text-md/normal" style={{ textAlign: "center", padding: "20px" }}>
-                            No pings yet. Get pinged and they'll appear here!
+                        <Text variant="text-md/normal" style={{ textAlign: "center", padding: "30px" }}>
+                            No pings recorded yet.
                         </Text>
                     ) : (
-                        pings.slice().reverse().map((ping, index) => (
-                            <div
-                                key={index}
-                                style={{
-                                    padding: "12px",
-                                    margin: "8px",
-                                    backgroundColor: "var(--background-secondary)",
-                                    borderRadius: "8px",
-                                    cursor: "pointer"
-                                }}
-                                onClick={() => {
-                                    FluxDispatcher.dispatch({
-                                        type: "CHANNEL_SELECT",
-                                        guildId: ping.guildId,
-                                        channelId: ping.channelId
-                                    });
-                                    modalProps.onClose();
-                                }}
-                            >
-                                <Text variant="text-md/bold" style={{ color: "#ED4245" }}>
-                                    {ping.pingType} • {ping.timestamp.toLocaleTimeString()}
-                                </Text>
-                                <Text variant="text-sm/normal">
-                                    <strong>{ping.author}</strong> in {ping.guildName ?? "DMs"} {ping.channelName ? `#${ping.channelName}` : ""}
-                                </Text>
-                                <Text variant="text-sm/normal" style={{ opacity: 0.8 }}>
-                                    {ping.content}
-                                </Text>
+                        pings.slice().reverse().map((ping, i) => (
+                            <div key={i} style={{
+                                padding: "12px",
+                                margin: "6px 0",
+                                backgroundColor: "var(--background-secondary)",
+                                borderRadius: "6px",
+                                cursor: "pointer"
+                            }} onClick={() => {
+                                FluxDispatcher.dispatch({ type: "CHANNEL_SELECT", guildId: ping.guildId, channelId: ping.channelId });
+                                modalProps.onClose();
+                            }}>
+                                <div style={{ color: "#ED4245", fontWeight: "bold" }}>
+                                    {ping.pingType} — {ping.timestamp.toLocaleTimeString()}
+                                </div>
+                                <div><strong>{ping.author}</strong> • {ping.guildName ?? "DMs"}</div>
+                                <div style={{ opacity: 0.85 }}>{ping.content}</div>
                             </div>
                         ))
                     )}
                 </ScrollerThin>
             </ModalContent>
             <ModalFooter>
-                <Button
-                    color={Button.Colors.RED}
-                    onClick={() => {
-                        pings = [];
-                        modalProps.onClose();
-                    }}
-                >
-                    Clear History
-                </Button>
+                <Button color={Button.Colors.RED} onClick={() => { pings = []; modalProps.onClose(); }}>Clear</Button>
                 <Button onClick={modalProps.onClose}>Close</Button>
             </ModalFooter>
         </ModalRoot>
@@ -84,8 +64,8 @@ function PingHistoryModal({ modalProps }: { modalProps: any }) {
 
 export default definePlugin({
     name: "ShowAllPings",
-    description: "Shows notifications for every ping + Toolbar button that opens ping history",
-    authors: [{ name: "YourName", id: 0n }], // Change to your Discord ID
+    description: "Shows notifications for every ping + Toolbar button with history",
+    authors: [{ name: "YourName", id: 0n }],
 
     headerBarButton: {
         render: () => (
@@ -98,22 +78,31 @@ export default definePlugin({
     },
 
     flux: {
-        MESSAGE_CREATE({ message, channelId, optimistic }) {
-            if (optimistic || message.author?.bot) return;
+        MESSAGE_CREATE(event: any) {
+            const { message, channelId, optimistic } = event;
+
+            console.log("[ShowAllPings] MESSAGE_CREATE received", {
+                hasMentionEveryone: message?.mention_everyone,
+                contentHasEveryone: /@everyone/i.test(message?.content || ""),
+                author: message?.author?.username
+            });
+
+            if (optimistic || message?.author?.bot) return;
 
             const currentUser = FluxDispatcher.getStore("UserStore").getCurrentUser();
             if (!currentUser || message.author?.id === currentUser.id) return;
 
-            const isPing =
-                message.mentions?.some((m: any) => m.id === currentUser.id) ||
-                message.mention_everyone ||
-                (message.content && /@everyone|@here/i.test(message.content));
+            const isMention = message.mentions?.some((m: any) => m.id === currentUser.id);
+            const isEveryone = message.mention_everyone || /@everyone/i.test(message.content || "");
+            const isHere = /@here/i.test(message.content || "");
+
+            const isPing = isMention || isEveryone || isHere;
 
             if (!isPing) return;
 
-            const pingType = message.mention_everyone ? "@everyone"
-                          : message.content?.includes("@here") ? "@here"
-                          : "@mention";
+            console.log("[ShowAllPings] 🔥 Ping detected!", { isEveryone, isHere, isMention });
+
+            const pingType = isEveryone ? "@everyone" : isHere ? "@here" : "@mention";
 
             const guild = FluxDispatcher.getStore("GuildStore").getGuild(message.guild_id);
             const channel = FluxDispatcher.getStore("ChannelStore").getChannel(channelId);
@@ -123,17 +112,16 @@ export default definePlugin({
                 timestamp: new Date(),
                 pingType,
                 author: message.author.username,
-                content: message.content?.slice(0, 150) || "",
+                content: message.content?.slice(0, 150) || "(no text)",
                 guildName: guild?.name,
                 channelName: channel?.name,
                 channelId,
                 guildId: message.guild_id
             };
 
-            pings.unshift(ping); // Add to top
-            if (pings.length > 50) pings.pop(); // Limit to 50 pings
+            pings.unshift(ping);
+            if (pings.length > 50) pings.pop();
 
-            // Also show desktop notification
             showNotification({
                 title: `${pingType} in ${guild?.name ?? "DMs"}`,
                 body: `${message.author.username}: ${message.content?.slice(0, 100) || ""}`,
@@ -143,6 +131,6 @@ export default definePlugin({
     },
 
     start() {
-        console.log("%c[ShowAllPings] ✅ Loaded with Ping History modal!", "color: #ED4245; font-weight: bold");
+        console.log("%c[ShowAllPings] ✅ Plugin loaded with improved @everyone detection", "color: #ED4245; font-weight: bold");
     }
 });
