@@ -3,30 +3,98 @@ import { FluxDispatcher } from "@webpack/common";
 import { showNotification } from "@api/Notifications";
 import { HeaderBarButton } from "@api/HeaderBar";
 import { React } from "@webpack/common";
+import { ModalContent, ModalFooter, ModalHeader, ModalRoot, ModalSize, openModal } from "@utils/modal";
+import { Button, Text, ScrollerThin } from "@webpack/common";
 
-function PingTestButton() {
+interface Ping {
+    id: string;
+    timestamp: Date;
+    pingType: string;
+    author: string;
+    content: string;
+    guildName?: string;
+    channelName?: string;
+    channelId: string;
+    guildId?: string;
+}
+
+let pings: Ping[] = [];
+
+function PingHistoryModal({ modalProps }: { modalProps: any }) {
     return (
-        <HeaderBarButton
-            tooltip="Test All Pings"
-            icon={() => <span style={{ fontSize: "20px" }}>🛎️</span>}
-            onClick={() => {
-                showNotification({
-                    title: "Test Ping Notification",
-                    body: "This is a test from the toolbar button!\n@everyone and @here also work.",
-                    color: "#ED4245"
-                });
-            }}
-        />
+        <ModalRoot size={ModalSize.MEDIUM} {...modalProps}>
+            <ModalHeader>
+                <Text variant="heading-lg/semibold">Ping History</Text>
+            </ModalHeader>
+            <ModalContent>
+                <ScrollerThin style={{ maxHeight: "400px" }}>
+                    {pings.length === 0 ? (
+                        <Text variant="text-md/normal" style={{ textAlign: "center", padding: "20px" }}>
+                            No pings yet. Get pinged and they'll appear here!
+                        </Text>
+                    ) : (
+                        pings.slice().reverse().map((ping, index) => (
+                            <div
+                                key={index}
+                                style={{
+                                    padding: "12px",
+                                    margin: "8px",
+                                    backgroundColor: "var(--background-secondary)",
+                                    borderRadius: "8px",
+                                    cursor: "pointer"
+                                }}
+                                onClick={() => {
+                                    FluxDispatcher.dispatch({
+                                        type: "CHANNEL_SELECT",
+                                        guildId: ping.guildId,
+                                        channelId: ping.channelId
+                                    });
+                                    modalProps.onClose();
+                                }}
+                            >
+                                <Text variant="text-md/bold" style={{ color: "#ED4245" }}>
+                                    {ping.pingType} • {ping.timestamp.toLocaleTimeString()}
+                                </Text>
+                                <Text variant="text-sm/normal">
+                                    <strong>{ping.author}</strong> in {ping.guildName ?? "DMs"} {ping.channelName ? `#${ping.channelName}` : ""}
+                                </Text>
+                                <Text variant="text-sm/normal" style={{ opacity: 0.8 }}>
+                                    {ping.content}
+                                </Text>
+                            </div>
+                        ))
+                    )}
+                </ScrollerThin>
+            </ModalContent>
+            <ModalFooter>
+                <Button
+                    color={Button.Colors.RED}
+                    onClick={() => {
+                        pings = [];
+                        modalProps.onClose();
+                    }}
+                >
+                    Clear History
+                </Button>
+                <Button onClick={modalProps.onClose}>Close</Button>
+            </ModalFooter>
+        </ModalRoot>
     );
 }
 
 export default definePlugin({
     name: "ShowAllPings",
-    description: "Shows notifications for EVERY ping (@mention, @everyone, @here) + Test button in toolbar",
+    description: "Shows notifications for every ping + Toolbar button that opens ping history",
     authors: [{ name: "YourName", id: 0n }], // Change to your Discord ID
 
     headerBarButton: {
-        render: PingTestButton
+        render: () => (
+            <HeaderBarButton
+                tooltip="Ping History"
+                icon={() => <span style={{ fontSize: "20px" }}>🛎️</span>}
+                onClick={() => openModal(props => <PingHistoryModal modalProps={props} />)}
+            />
+        )
     },
 
     flux: {
@@ -48,7 +116,24 @@ export default definePlugin({
                           : "@mention";
 
             const guild = FluxDispatcher.getStore("GuildStore").getGuild(message.guild_id);
+            const channel = FluxDispatcher.getStore("ChannelStore").getChannel(channelId);
 
+            const ping: Ping = {
+                id: message.id,
+                timestamp: new Date(),
+                pingType,
+                author: message.author.username,
+                content: message.content?.slice(0, 150) || "",
+                guildName: guild?.name,
+                channelName: channel?.name,
+                channelId,
+                guildId: message.guild_id
+            };
+
+            pings.unshift(ping); // Add to top
+            if (pings.length > 50) pings.pop(); // Limit to 50 pings
+
+            // Also show desktop notification
             showNotification({
                 title: `${pingType} in ${guild?.name ?? "DMs"}`,
                 body: `${message.author.username}: ${message.content?.slice(0, 100) || ""}`,
@@ -58,6 +143,6 @@ export default definePlugin({
     },
 
     start() {
-        console.log("%c[ShowAllPings] ✅ Loaded with toolbar button", "color: #ED4245; font-weight: bold");
+        console.log("%c[ShowAllPings] ✅ Loaded with Ping History modal!", "color: #ED4245; font-weight: bold");
     }
 });
