@@ -4,24 +4,29 @@ import { showNotification } from "@api/Notifications";
 import { HeaderBarButton } from "@api/HeaderBar";
 import { React } from "@webpack/common";
 
+function PingTestButton() {
+    return (
+        <HeaderBarButton
+            tooltip="Test All Pings"
+            icon={() => <span style={{ fontSize: "20px" }}>🛎️</span>}
+            onClick={() => {
+                showNotification({
+                    title: "Test Ping Notification",
+                    body: "This is a test from the toolbar button!\n@everyone and @here also work.",
+                    color: "#ED4245"
+                });
+            }}
+        />
+    );
+}
+
 export default definePlugin({
     name: "ShowAllPings",
-    description: "Shows notifications for EVERY ping + Test button in toolbar (like Soggy)",
+    description: "Shows notifications for EVERY ping (@mention, @everyone, @here) + Test button in toolbar",
     authors: [{ name: "YourName", id: 0n }], // Change to your Discord ID
 
-    // Adds button to the top-right header bar
     headerBarButton: {
-        icon: () => (
-            <span style={{ fontSize: "18px", lineHeight: "1" }}>🛎️</span>
-        ),
-        tooltip: "Test All Pings",
-        onClick: () => {
-            showNotification({
-                title: "Test Ping Notification",
-                body: "This is a test! @everyone and @here work too.",
-                color: "#ED4245"
-            });
-        }
+        render: PingTestButton
     },
 
     flux: {
@@ -53,6 +58,6 @@ export default definePlugin({
     },
 
     start() {
-        console.log("%c[ShowAllPings] ✅ Loaded with toolbar button!", "color: #ED4245; font-weight: bold");
+        console.log("%c[ShowAllPings] ✅ Loaded with toolbar button", "color: #ED4245; font-weight: bold");
     }
 });
